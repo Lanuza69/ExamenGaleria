@@ -1,0 +1,54 @@
+# ============================
+#   Visual Studio / .NET
+# ============================
+
+# Build results
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio cache
+.vs/
+
+# NuGet
+*.nupkg
+packages/
+*.snupkg
+
+# Backup & temp files
+*.tmp
+*.bak
+*.log
+*.cache
+*.pdb
+
+# ============================
+#   Ignorar carpeta DATA
+# ============================
+
+# Ignorar la carpeta data dentro de Debug y Release
+bin/Debug/**/data/
+bin/Release/**/data/
+
+# Ignorar también si existe en raíz del proyecto
+data/
+
+# ============================
+#   Otros
+# ============================
+
+# SQLite database files
+*.sqlite
+*.db
+*.db-shm
+*.db-wal
+
+# JSON de sesión
+sesion.json
