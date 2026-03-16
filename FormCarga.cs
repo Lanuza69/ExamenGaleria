@@ -10,9 +10,9 @@ using System.Windows.Forms;
 
 namespace Galeria
 {
-    public partial class FormSplash : Form
+    public partial class FormCarga : Form
     {
-        public FormSplash()
+        public FormCarga()
         {
             InitializeComponent();
         }

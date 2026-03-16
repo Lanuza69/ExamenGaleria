@@ -12,7 +12,11 @@ namespace Galeria
 
 
     public class AppContexto : ApplicationContext
+       
     {
+        //-----------------------------------------
+        //ATRIBUTOS
+        //-----------------------------------------
         //readonly porque las rutas no cambian durante la ejecución, pero se asignan en el contructor porque dependen de la ruta de inicio
         private readonly string rutaData;
         private readonly string rutaBD;
@@ -32,12 +36,13 @@ namespace Galeria
             MostrarSplash();
         }
 
+        #region Petañas
         /// <summary>
         /// Formulario pensando para cargar el sistema mientras se muestra una pantalla de carga
         /// </summary>
         private async void MostrarSplash()
         {
-            var splash = new FormSplash();
+            var splash = new FormCarga();
             splash.Show();
 
             await Task.Run(() => InicializarSistema());
@@ -56,9 +61,48 @@ namespace Galeria
             }
         }
 
-        // ---------------------------------------------------------
-        // INICIALIZACIÓN DEL SISTEMA
-        // ---------------------------------------------------------
+        private void MostrarLogin()
+        {
+            var login = new FormLogin();
+
+            login.OnLoginCorrecto += (usuario, contrasena, darkMode, control) =>
+            {
+                var sesion = new SesionUsuario
+                {
+                    Usuario = usuario,
+                    Contrasena = contrasena,
+                    DarkMode = darkMode
+                };
+
+                GuardarSesionJSON(sesion);
+
+                MostrarPrincipal(sesion);
+                login.Close();
+            };
+
+            login.Show();
+        }
+
+        private void MostrarPrincipal(SesionUsuario sesion)
+        {
+            var principal = new FormPrincipal(sesion.Usuario, sesion.DarkMode, ObtenerControlUsuario(sesion.Usuario));
+
+            principal.OnCerrarSesion += () =>
+            {
+                BorrarSesionJSON();
+                MostrarLogin();
+                principal.Close();
+            };
+
+            principal.Show();
+        }
+    }
+        #endregion
+
+        #region Utils
+        /// <summary>
+        /// Metodo que valida los datos minimos para que el sistema inicio correctamente
+        /// </summary>
         private void InicializarSistema()
         {
             if (!Directory.Exists(rutaData))
@@ -78,7 +122,9 @@ namespace Galeria
             CrearOActualizarUsuarioAdmin();
         }
 
-
+        /// <summary>
+        /// Metodo que maneja el uso de la Clave AES del sistema, tanto cuando no existe o cuando se tiene que cargar de key.bin
+        /// </summary>
         private void CargarClaveAES()
         {
             if (File.Exists(rutaKey))
@@ -86,13 +132,14 @@ namespace Galeria
                 byte[] protegido = File.ReadAllBytes(rutaKey);
                 AES_KEY = ProtectedData.Unprotect(protegido, null, DataProtectionScope.CurrentUser);//Optiene la clava AES encriptada y la desencripta para usarla en el sistema
             }
-            else { 
+            else
+            {
 
-            AES_KEY = GenerarClaveAES32();
+                AES_KEY = GenerarClaveAES32();
 
-            byte[] protegidoNuevo = ProtectedData.Protect(AES_KEY, null, DataProtectionScope.CurrentUser);//Encripta la propia clave AES para guardarla de forma segura en el sistema
+                byte[] protegidoNuevo = ProtectedData.Protect(AES_KEY, null, DataProtectionScope.CurrentUser);//Encripta la propia clave AES para guardarla de forma segura en el sistema
                 File.WriteAllBytes(rutaKey, protegidoNuevo);
-            File.SetAttributes(rutaKey, FileAttributes.Hidden | FileAttributes.ReadOnly);//Oculta el archivo y lo marca como solo lectura para mayor seguridad
+                File.SetAttributes(rutaKey, FileAttributes.Hidden | FileAttributes.ReadOnly);//Oculta el archivo y lo marca como solo lectura para mayor seguridad
             }
         }
 
@@ -104,9 +151,8 @@ namespace Galeria
             return key;
         }
 
-        // ---------------------------------------------------------
-        // AES ENCRIPTAR / DESENCRIPTAR
-        // ---------------------------------------------------------
+        #region Encriptar/Descriptar
+
         public static string EncriptarAES(string texto)
         {
             using (Aes aes = Aes.Create())
@@ -151,72 +197,9 @@ namespace Galeria
                 }
             }
         }
+        #endregion
 
-        // ---------------------------------------------------------
-        // CREAR BASE DE DATOS
-        // ---------------------------------------------------------
-        private void CrearBaseDeDatos()
-        {
-            SQLiteConnection.CreateFile(rutaBD);
-
-            using (var con = new SQLiteConnection("Data Source=" + rutaBD))
-            {
-                con.Open();
-
-                string sql = @"
-            PRAGMA foreign_keys = ON;
-
-            CREATE TABLE IF NOT EXISTS Usuario (
-                IdUsuario INTEGER PRIMARY KEY AUTOINCREMENT,
-                Nombre TEXT NOT NULL,
-                Contrasena TEXT NOT NULL,
-                Control CHAR(1) NOT NULL
-            );
-            ";
-
-                new SQLiteCommand(sql, con).ExecuteNonQuery();
-            }
-        }
-
-        // ---------------------------------------------------------
-        // CREAR O ACTUALIZAR USUARIO ADMIN
-        // ---------------------------------------------------------
-        private void CrearOActualizarUsuarioAdmin()
-        {
-            using (var con = new SQLiteConnection("Data Source=" + rutaBD))
-            {
-                con.Open();
-
-                string sqlCount = "SELECT COUNT(*) FROM Usuario WHERE IdUsuario = 0";
-                long count = (long)new SQLiteCommand(sqlCount, con).ExecuteScalar();
-
-                string passCifrada = EncriptarAES(ADMIN_PSW);
-
-                if (count == 0)
-                {
-                    string insert = @"INSERT INTO Usuario (IdUsuario, Nombre, Contrasena, Control)
-                                  VALUES (0, 'Admin', @pass, 'A')";
-
-                    var cmd = new SQLiteCommand(insert, con);
-                    cmd.Parameters.AddWithValue("@pass", passCifrada);
-                    cmd.ExecuteNonQuery();
-                }
-                else
-                {
-                    string update = @"UPDATE Usuario 
-                                  SET Contrasena = @pass, Nombre = 'Admin', Control = 'A'
-                                  WHERE IdUsuario = 0";
-
-                    var cmd = new SQLiteCommand(update, con);
-                    cmd.Parameters.AddWithValue("@pass", passCifrada);
-                    cmd.ExecuteNonQuery();
-                }
-            }
-        }
-
-        // ---------------------------------------------------------
-        // JSON SESIÓN
-        // ---------------------------------------------------------
+        #region Json
         private SesionUsuario LeerSesionJSON()
         {
             if (!File.Exists(rutaJSON))
@@ -244,10 +227,10 @@ namespace Galeria
             if (File.Exists(rutaJSON))
                 File.Delete(rutaJSON);
         }
+        #endregion
 
-        // ---------------------------------------------------------
-        // VALIDAR SESIÓN CONTRA SQLITE
-        // ---------------------------------------------------------
+        //TODO: generar una Clase estatica  independiente que maneje todo el SQLite
+        #region SqlLite 
         private bool ValidarSesionSQLite(SesionUsuario sesion)
         {
             using (var con = new SQLiteConnection("Data Source=" + rutaBD))
@@ -282,45 +265,68 @@ namespace Galeria
             }
         }
 
-        // ---------------------------------------------------------
-        // LOGIN Y PRINCIPAL
-        // ---------------------------------------------------------
-        private void MostrarLogin()
+        private void CrearBaseDeDatos()
         {
-            var login = new FormLogin();
+            SQLiteConnection.CreateFile(rutaBD);
 
-            login.OnLoginCorrecto += (usuario, contrasena, darkMode, control) =>
+            using (var con = new SQLiteConnection("Data Source=" + rutaBD))
             {
-                var sesion = new SesionUsuario
+                con.Open();
+
+                string sql = @"
+            PRAGMA foreign_keys = ON;
+
+            CREATE TABLE IF NOT EXISTS Usuario (
+                IdUsuario INTEGER PRIMARY KEY AUTOINCREMENT,
+                Nombre TEXT NOT NULL,
+                Contrasena TEXT NOT NULL,
+                Control CHAR(1) NOT NULL
+            );
+            ";
+
+                new SQLiteCommand(sql, con).ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>
+        /// Inicializacion/Actualizacion del primer Usuario de de la base de datos para que su contraseña siempre coincida con la clave AES actual del sistema
+        /// </summary>
+        private void CrearOActualizarUsuarioAdmin()
+        {
+            using (var con = new SQLiteConnection("Data Source=" + rutaBD))
+            {
+                con.Open();
+
+                string sqlCount = "SELECT COUNT(*) FROM Usuario WHERE IdUsuario = 0";
+                long count = (long)new SQLiteCommand(sqlCount, con).ExecuteScalar();
+
+                string passCifrada = EncriptarAES(ADMIN_PSW);
+
+                if (count == 0)
                 {
-                    Usuario = usuario,
-                    Contrasena = contrasena,
-                    DarkMode = darkMode
-                };
+                    string insert = @"INSERT INTO Usuario (IdUsuario, Nombre, Contrasena, Control)
+                                  VALUES (0, 'Admin', @pass, 'A')";
 
-                GuardarSesionJSON(sesion);
+                    var cmd = new SQLiteCommand(insert, con);
+                    cmd.Parameters.AddWithValue("@pass", passCifrada);
+                    cmd.ExecuteNonQuery();
+                }
+                else
+                {
+                    string update = @"UPDATE Usuario 
+                                  SET Contrasena = @pass, Nombre = 'Admin', Control = 'A'
+                                  WHERE IdUsuario = 0";
 
-                MostrarPrincipal(sesion);
-                login.Close();
-            };
-
-            login.Show();
+                    var cmd = new SQLiteCommand(update, con);
+                    cmd.Parameters.AddWithValue("@pass", passCifrada);
+                    cmd.ExecuteNonQuery();
+                }
+            }
         }
 
-        private void MostrarPrincipal(SesionUsuario sesion)
-        {
-            var principal = new FormPrincipal(sesion.Usuario, sesion.DarkMode, ObtenerControlUsuario(sesion.Usuario));
+        #endregion
+        #endregion
 
-            principal.OnCerrarSesion += () =>
-            {
-                BorrarSesionJSON();
-                MostrarLogin();
-                principal.Close();
-            };
 
-            principal.Show();
-        }
+
     }
-
-
-}
